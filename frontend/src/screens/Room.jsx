@@ -6,6 +6,7 @@ const RoomPage = () => {
     const socket = useSocket();
     const [remoteSocketId, setRemoteSocketId] = useState(null);
     const [myStream,setMyStream] = useState(null); 
+    const [remoteStream, setRemoteStream]= useState();
     const handleCallUser = useCallback(async()=> {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video:true});
         const offer = await peer.getOffer();
@@ -29,12 +30,40 @@ const RoomPage = () => {
     const handleCallAccepted = useCallback(({from, ans}) => {
         peer.setLocalDescription(ans);
         console.log("Call Accepted");
-    },[])
+        for (const track of myStream.getTracks()){
+            peer.peer.addTrack(track, myStream);
+        }
+    },[myStream])
+
+    const handleNegoNeedIncoming = useCallback(()=> {
+        
+    })
+
+    useEffect(()=> {
+        peer.peer.addEventListener('track',async ev => {
+            const remoteStream = ev.streams
+            setRemoteStream(remoteStream);
+        });
+    },[]);
+
+    const handleNegoNeeded = useCallback(async() => {
+        const offer = await peer.getOffer();
+        socket.email('peer:nego:needed',{offer, to:remoteSocketId})
+    },[remoteSocketId, socket]);
+
+    
+    useEffect(()=> {
+        peer.peer.addEventListener('negotiationneeded', handleNegoNeeded);
+        return ()=> {
+            peer.peer.removeEventListener("negotiationneeded",handleNegoNeeded);
+        }
+    },[handleNegoNeeded]);
 
     useEffect(()=> {
         socket.on('user:joined',handleUserJoined);
         socket.on("incoming:call",handleIncomingCall);
         socket.on("call:accepted",handleCallAccepted);
+        socket.on("peer:nego:needed", handleNegoNeedIncoming)
         return () => {
             socket.off("user:joined", handleUserJoined);
             socket.off("incoming:call",handleIncomingCall);
@@ -51,7 +80,16 @@ const RoomPage = () => {
         {
             myStream && (
             <>
-            <ReactPlayer playing muted height="300px" width="500px" url={myStream}/>
+            <h1>My Stream</h1>
+            <ReactPlayer playing muted height="100px" width="200px" url={myStream}/>
+            </>
+            )
+        }
+        {
+            remoteStream && (
+            <>
+            <h1>Remote Stream</h1>
+            <ReactPlayer playing muted height="200px" width="400px" url={myStream}/>
             </>
             )
         }
